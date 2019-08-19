@@ -177,7 +177,7 @@ net = Selfie(resnet=resnet50, tsize=encoder_size)
 net = net.to(device)
 
 criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(net.parameters(), lr=0.01, weight_decay=5e-4)
+optimizer = torch.optim.Adam(net.parameters(), lr=0.001, weight_decay=5e-4)
 
 
 # Training
