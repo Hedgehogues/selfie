@@ -215,8 +215,7 @@ def train(epoch):
             max_loss = -10000
 
 
-def test(epoch):
-    global best_acc
+def test():
     net.eval()
     test_loss = 0
     correct = 0
