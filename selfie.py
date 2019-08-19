@@ -229,7 +229,7 @@ def test():
             _, predicted = outputs.max(1)
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
-            print(test_loss, (targets == predicted).numpy().sum() / predicted.shape[0])
+            print(test_loss, (targets == predicted).deatch().cpu().numpy().sum() / predicted.shape[0])
 
 
 for epoch in range(0, 0+200):
