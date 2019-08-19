@@ -1,68 +1,9 @@
-import os
-
 import torch
 import torchvision
 from torch import nn
 import torch.nn.functional as F
 from torchvision import transforms
 import numpy as np
-
-
-class Attention(nn.Module):
-    """
-    Computes a weighted average of channels across timesteps (1 parameter pr. channel).
-
-    https://gist.github.com/thomwolf/dec72992ea6817290273d42f6b95c04c
-    https://github.com/thomlake/pytorch-attention
-    """
-    def __init__(self, attention_size, return_attention=False):
-        """ Initialize the attention layer
-        # Arguments:
-            attention_size: Size of the attention vector.
-            return_attention: If true, output will include the weight for each input token
-                              used for the prediction
-        """
-        super(Attention, self).__init__()
-        self.return_attention = return_attention
-        self.attention_size = attention_size
-        self.attention_vector = nn.Parameter(torch.FloatTensor(attention_size))
-
-    def __repr__(self):
-        s = '{name}({attention_size}, return attention={return_attention})'
-        return s.format(name=self.__class__.__name__, **self.__dict__)
-
-    def forward(self, inputs, input_lengths):
-        """ Forward pass.
-        # Arguments:
-            inputs (Torch.Variable): Tensor of input sequences
-            input_lengths (torch.LongTensor): Lengths of the sequences
-        # Return:
-            Tuple with (representations and attentions if self.return_attention else None).
-        """
-        logits = inputs.matmul(self.attention_vector)
-        unnorm_ai = (logits - logits.max()).exp()
-
-        # Compute a mask for the attention on the padded sequences
-        # See e.g. https://discuss.pytorch.org/t/self-attention-on-words-and-masking/5671/5
-        max_len = unnorm_ai.size(1)
-        idxes = torch.arange(0, max_len, out=torch.LongTensor(max_len)).unsqueeze(0)
-        if torch.cuda.is_available():
-            idxes = idxes.cuda()
-        mask = torch.Variable((idxes < input_lengths.unsqueeze(1)).float())
-
-        # apply mask and renormalize attention scores (weights)
-        masked_weights = unnorm_ai * mask
-        att_sums = masked_weights.sum(dim=1, keepdim=True)  # sums per sequence
-        attentions = masked_weights.div(att_sums)
-
-        # apply attention weights
-        weighted = torch.mul(inputs, attentions.unsqueeze(-1).expand_as(inputs))
-
-        # get the final fixed vector representations of the sentences
-        representations = weighted.sum(dim=1)
-
-        attentions = attentions if self.return_attention else None
-        return representations, attentions
 
 
 class Selfie(nn.Module):
@@ -125,7 +66,7 @@ transform_test = transforms.Compose([
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
 trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform_train)
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=256, shuffle=True, num_workers=2)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=1, shuffle=True, num_workers=2)
 
 testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform_test)
 testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
@@ -160,7 +101,7 @@ def patches_generator(loader, patch_size=8, decoder_size=9, encoder_size=3):
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(device)
 encoder_size = 3
-resnet50 = torchvision.models.resnet50(pretrained=True)
+resnet50 = torchvision.models.resnet50(pretrained=False)
 resnet50 = resnet50.to(device)
 net = Selfie(resnet=resnet50, tsize=encoder_size)
 net = net.to(device)
@@ -169,7 +110,6 @@ criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(net.parameters(), lr=0.001, weight_decay=5e-4)
 
 
-# Training
 def train(epoch):
     print('\nEpoch: %d' % epoch)
     net.train()
