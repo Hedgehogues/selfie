@@ -99,6 +99,7 @@ class Selfie(nn.Module):
         u = F.relu(self.fc1(u))
         u = F.relu(self.fc2(u))
         u = F.relu(self.fc3(u))
+        u = self.bn3(u)
         return u
 
     def forward(self, decoder, encoder, target_patch):
@@ -123,8 +124,7 @@ class Selfie(nn.Module):
         res = F.relu(self.fc5(res))
         res = F.relu(self.fc6(res))
         res = self.fc7(res)
-        t = [encoder[i, 0, 0, 0, 0] == target_patch[0, 0, 0, 0, 0] for i in range(3)]
-        # print(res.detach().numpy().mean(axis=0), t, F.softmax(res))
+        res = self.bn_out(res)
         return res
 
 
