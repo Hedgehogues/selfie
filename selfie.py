@@ -209,6 +209,7 @@ def train(epoch):
             train_loss = 0.0
             min_loss = 10000
             max_loss = -10000
+        break
 
 
 def test():
@@ -225,11 +226,10 @@ def test():
             outputs = net(decoder, encoder, target_patch)
             loss = criterion(outputs, targets)
 
-            test_loss += loss.item()
             _, predicted = outputs.max(1)
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
-            print(test_loss, (targets == predicted).cpu().numpy().sum() / predicted.shape[0])
+            print(loss.item(), (targets == predicted).type(torch.DoubleTensor).sum() / predicted.shape[0])
 
 
 for epoch in range(0, 0+200):
