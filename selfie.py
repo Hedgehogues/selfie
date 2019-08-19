@@ -81,7 +81,7 @@ class Selfie(nn.Module):
         self.fc2 = nn.Linear(self.fc2_n, self.fc3_n)
         self.fc3 = nn.Linear(self.fc3_n, self.fc_out_1)
 
-    def attention(self, v, n):
+    def attention0(self, v, n):
         u = v[:, :n].reshape(-1, self.fc1_n)
         u = F.relu(self.fc1(u))
         u = F.relu(self.fc2(u))
@@ -103,7 +103,7 @@ class Selfie(nn.Module):
         h0 = v[:, decoder_n + encoder_n:decoder_n + encoder_n + 1].view(-1, self.fc_n)
         h = v[:, decoder_n:decoder_n + encoder_n]
 
-        a = self.attention(v, decoder_n)
+        a = self.attention0(v, decoder_n)
         u = h0 + a
         ts = []
         for i in range(encoder_n):
@@ -160,7 +160,7 @@ def patches_generator(loader, patch_size=8, decoder_size=9, encoder_size=3):
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(device)
 encoder_size = 3
-resnet50 = torchvision.models.resnet50(pretrained=False)
+resnet50 = torchvision.models.resnet50(pretrained=True)
 resnet50 = resnet50.to(device)
 net = Selfie(resnet=resnet50, tsize=encoder_size)
 net = net.to(device)
