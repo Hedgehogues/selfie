@@ -74,23 +74,38 @@ class Selfie(nn.Module):
         self.fc_n = 512
         self.fc1_n = self.fc_n * self.patch_size
         self.fc2_n = self.fc_n * int(self.patch_size / 3)
-        self.fc3_n = self.fc_n
+        self.fc3_n = self.fc_n * int(self.patch_size * 2 / 3)
+        self.fc_out_1 = self.fc_n
 
         self.fc1 = nn.Linear(self.fc1_n, self.fc2_n)
         self.fc2 = nn.Linear(self.fc2_n, self.fc3_n)
-        self.fc3 = nn.Linear(self.fc3_n, self.fc3_n)
+        self.fc3 = nn.Linear(self.fc3_n, self.fc_out_1)
+        self.bn3 = nn.BatchNorm1d(self.fc_out_1)
+
+        self.fc_4_n = self.fc_n * (self.tsize + 1)
+        self.fc_5_n = int(self.fc_n / 2 * (self.tsize + 1))
+        self.fc_6_n = int(self.fc_n / 4 * (self.tsize + 1))
+        self.fc_7_n = int(self.fc_n / 9 * (self.tsize + 1))
+        self.fc_out_2 = tsize
+
+        self.fc4 = nn.Linear(self.fc_4_n, self.fc_5_n)
+        self.fc5 = nn.Linear(self.fc_5_n, self.fc_6_n)
+        self.fc6 = nn.Linear(self.fc_6_n, self.fc_7_n)
+        self.fc7 = nn.Linear(self.fc_7_n, self.fc_out_2)
+        self.bn_out = nn.BatchNorm1d(self.fc_out_2)
 
     def fake_attention(self, v, n):
         u = v[:, :n].reshape(-1, self.fc1_n)
         u = F.relu(self.fc1(u))
         u = F.relu(self.fc2(u))
         u = F.relu(self.fc3(u))
+        u = self.bn3(u)
         return u
 
     def forward(self, decoder, encoder, target_patch):
         decoder_n = decoder.shape[1]
         encoder_n = encoder.shape[1]
-        batch_n = encoder.shape[0]
+        batch_size = encoder.shape[0]
 
         decoder = decoder.permute(1, 0, 2, 3, 4)
         encoder = encoder.permute(1, 0, 2, 3, 4)
@@ -101,20 +116,14 @@ class Selfie(nn.Module):
         v = self.resnet_cut(x).view(-1, self.fc_n).reshape(-1, self.fc_n).reshape(-1, n, self.fc_n)
 
         u = self.fake_attention(v, decoder_n)
-        h0 = v[:, decoder_n+encoder_n:decoder_n+encoder_n+1].view(-1, 512)
-        u += h0
-        for i in range(batch_n):
-            u[i] = u[i] / u[i].detach().norm()
-        h = v[:, decoder_n:decoder_n+encoder_n]
-        for i in range(encoder_n):
-            h[:, i] = h[:, i].detach() / h[:, i].detach().norm()
-
-        res = []
-        for i in range(h.shape[1]):
-            target_i = u @ h[:, i, :].transpose(0, 1)
-            res.append(target_i[:, 0])
-        res = torch.stack(res).transpose(1, 0)
-        res = F.softmax(res)
+        h0 = v[:, decoder_n+encoder_n:decoder_n+encoder_n+1].view(-1, self.fc_n)
+        h = v[:, decoder_n:decoder_n + encoder_n].view(batch_size, -1)
+        res = torch.cat([u + h0, h], dim=1)
+        res = F.relu(self.fc4(res))
+        res = F.relu(self.fc5(res))
+        res = F.relu(self.fc6(res))
+        res = self.fc7(res)
+        res = self.bn_out(res)
 
         return res
 
@@ -131,10 +140,10 @@ transform_test = transforms.Compose([
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
 trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=False, transform=transform_train)
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=1, shuffle=True, num_workers=2)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=100, shuffle=True, num_workers=2)
 
 testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=False, transform=transform_test)
-testloader = torch.utils.data.DataLoader(testset, batch_size=1, shuffle=False, num_workers=2)
+testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
 
 
 def patches_generator(loader, patch_size=8, decoder_size=9, encoder_size=3):
@@ -163,11 +172,16 @@ def patches_generator(loader, patch_size=8, decoder_size=9, encoder_size=3):
         yield item
 
 
-resnet50 = torchvision.models.resnet50(pretrained=False)
-net = Selfie(resnet=resnet50, tsize=3)
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+print(device)
+encoder_size = 3
+resnet50 = torchvision.models.resnet50(pretrained=True)
+resnet50 = resnet50.to(device)
+net = Selfie(resnet=resnet50, tsize=encoder_size)
+net = net.to(device)
 
 criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(net.parameters(), lr=0.02, weight_decay=5e-4)
+optimizer = torch.optim.Adam(net.parameters(), lr=0.01, weight_decay=5e-4)
 
 
 # Training
@@ -178,15 +192,14 @@ def train(epoch):
     min_loss = 10000
     max_loss = -10000
     print_step = 10
-    losses = []
-    min_losses = []
-    max_losses = []
-    hists = []
     torch.autograd.set_detect_anomaly(True)
-    for i, (decoder, encoder, target_patch, targets) in enumerate(patches_generator(trainloader)):
+    for i, (decoder, encoder, target_patch, targets) in enumerate(patches_generator(trainloader, encoder_size=encoder_size)):
         optimizer.zero_grad()
+        decoder = decoder.to(device)
+        encoder = encoder.to(device)
+        target_patch = target_patch.to(device)
+        targets = targets.to(device)
         outputs = net(decoder, encoder, target_patch)
-        hists.append(list(outputs[0]))
         loss = criterion(outputs, targets)
         loss.backward()
         optimizer.step()
@@ -197,9 +210,6 @@ def train(epoch):
         if i > 0 and i % print_step == 0:
             print('[%d, %5d] loss: %.3f. min_loss: %.3f. max_loss: %.3f' %
                   (epoch + 1, i + 1, train_loss / print_step, min_loss, max_loss))
-            losses.append(train_loss / print_step)
-            min_losses.append(min_loss)
-            max_losses.append(max_loss)
             train_loss = 0.0
             min_loss = 10000
             max_loss = -10000
