@@ -99,7 +99,6 @@ class Selfie(nn.Module):
         u = F.relu(self.fc1(u))
         u = F.relu(self.fc2(u))
         u = F.relu(self.fc3(u))
-        u = self.bn3(u)
         return u
 
     def forward(self, decoder, encoder, target_patch):
@@ -113,18 +112,19 @@ class Selfie(nn.Module):
         flatten_input = decoder.unbind() + encoder.unbind() + target_patch.unbind()
         x = torch.stack(flatten_input).reshape(-1, 3, 8, 8)
         n = decoder_n + encoder_n + 1
-        v = self.resnet_cut(x).view(-1, self.fc_n).reshape(-1, self.fc_n).reshape(-1, n, self.fc_n)
+        v = self.resnet_cut(x).view(-1, self.fc_n).reshape(n, -1, self.fc_n)
+        v = v.permute(1, 0, 2)
 
         u = self.fake_attention(v, decoder_n)
         h0 = v[:, decoder_n+encoder_n:decoder_n+encoder_n+1].view(-1, self.fc_n)
-        h = v[:, decoder_n:decoder_n + encoder_n].view(batch_size, -1)
+        h = v[:, decoder_n:decoder_n + encoder_n].reshape(batch_size, -1)
         res = torch.cat([u + h0, h], dim=1)
         res = F.relu(self.fc4(res))
         res = F.relu(self.fc5(res))
         res = F.relu(self.fc6(res))
         res = self.fc7(res)
-        res = self.bn_out(res)
-
+        t = [encoder[i, 0, 0, 0, 0] == target_patch[0, 0, 0, 0, 0] for i in range(3)]
+        # print(res.detach().numpy().mean(axis=0), t, F.softmax(res))
         return res
 
 
@@ -140,7 +140,7 @@ transform_test = transforms.Compose([
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
 trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform_train)
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=1024, shuffle=True, num_workers=2)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=2, shuffle=True, num_workers=2)
 
 testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform_test)
 testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
