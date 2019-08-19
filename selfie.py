@@ -171,7 +171,7 @@ def patches_generator(loader, patch_size=8, decoder_size=9, encoder_size=3):
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(device)
 encoder_size = 3
-resnet50 = torchvision.models.resnet50(pretrained=True)
+resnet50 = torchvision.models.resnet50(pretrained=False)
 resnet50 = resnet50.to(device)
 net = Selfie(resnet=resnet50, tsize=encoder_size)
 net = net.to(device)
