@@ -81,18 +81,7 @@ class Selfie(nn.Module):
         self.fc2 = nn.Linear(self.fc2_n, self.fc3_n)
         self.fc3 = nn.Linear(self.fc3_n, self.fc_out_1)
 
-        self.fc_4_n = self.fc_n * (self.tsize + 1)
-        self.fc_5_n = int(self.fc_n / 2 * (self.tsize + 1))
-        self.fc_6_n = int(self.fc_n / 4 * (self.tsize + 1))
-        self.fc_7_n = int(self.fc_n / 9 * (self.tsize + 1))
-        self.fc_out_2 = tsize
-
-        self.fc4 = nn.Linear(self.fc_4_n, self.fc_5_n)
-        self.fc5 = nn.Linear(self.fc_5_n, self.fc_6_n)
-        self.fc6 = nn.Linear(self.fc_6_n, self.fc_7_n)
-        self.fc7 = nn.Linear(self.fc_7_n, self.fc_out_2)
-
-    def fake_attention(self, v, n):
+    def attention(self, v, n):
         u = v[:, :n].reshape(-1, self.fc1_n)
         u = F.relu(self.fc1(u))
         u = F.relu(self.fc2(u))
@@ -102,7 +91,6 @@ class Selfie(nn.Module):
     def forward(self, decoder, encoder, target_patch):
         decoder_n = decoder.shape[1]
         encoder_n = encoder.shape[1]
-        batch_size = encoder.shape[0]
 
         decoder = decoder.permute(1, 0, 2, 3, 4)
         encoder = encoder.permute(1, 0, 2, 3, 4)
@@ -112,14 +100,14 @@ class Selfie(nn.Module):
         n = decoder_n + encoder_n + 1
         v = self.resnet_cut(x).view(-1, self.fc_n).reshape(n, -1, self.fc_n)
         v = v.permute(1, 0, 2)
-
-        u = self.fake_attention(v, decoder_n)
-        h0 = v[:, decoder_n+encoder_n:decoder_n+encoder_n+1].view(-1, self.fc_n)
+        h0 = v[:, decoder_n + encoder_n:decoder_n + encoder_n + 1].view(-1, self.fc_n)
         h = v[:, decoder_n:decoder_n + encoder_n]
-        v = u + h0
+
+        a = self.attention(v, decoder_n)
+        u = h0 + a
         ts = []
         for i in range(encoder_n):
-            t = (v @ h[:, i, :].transpose(0, 1)).diag()
+            t = (u @ h[:, i, :].transpose(0, 1)).diag()
             ts.append(t)
         ts = torch.stack(ts).transpose(0, 1)
         return ts
