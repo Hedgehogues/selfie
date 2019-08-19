@@ -222,8 +222,12 @@ def test(epoch):
     correct = 0
     total = 0
     with torch.no_grad():
-        for batch_idx, (inputs, targets) in enumerate(testloader):
-            outputs = net(inputs)
+        for batch_idx, (decoder, encoder, target_patch, targets) in enumerate(patches_generator(testloader, encoder_size=encoder_size)):
+            decoder = decoder.to(device)
+            encoder = encoder.to(device)
+            target_patch = target_patch.to(device)
+            targets = targets.to(device)
+            outputs = net(decoder, encoder, target_patch)
             loss = criterion(outputs, targets)
 
             test_loss += loss.item()
