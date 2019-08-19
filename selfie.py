@@ -209,12 +209,10 @@ def train(epoch):
             train_loss = 0.0
             min_loss = 10000
             max_loss = -10000
-        break
 
 
 def test():
     net.eval()
-    test_loss = 0
     correct = 0
     total = 0
     with torch.no_grad():
