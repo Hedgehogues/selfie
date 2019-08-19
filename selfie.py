@@ -80,7 +80,6 @@ class Selfie(nn.Module):
         self.fc1 = nn.Linear(self.fc1_n, self.fc2_n)
         self.fc2 = nn.Linear(self.fc2_n, self.fc3_n)
         self.fc3 = nn.Linear(self.fc3_n, self.fc_out_1)
-        self.bn3 = nn.BatchNorm1d(self.fc_out_1)
 
         self.fc_4_n = self.fc_n * (self.tsize + 1)
         self.fc_5_n = int(self.fc_n / 2 * (self.tsize + 1))
@@ -92,14 +91,12 @@ class Selfie(nn.Module):
         self.fc5 = nn.Linear(self.fc_5_n, self.fc_6_n)
         self.fc6 = nn.Linear(self.fc_6_n, self.fc_7_n)
         self.fc7 = nn.Linear(self.fc_7_n, self.fc_out_2)
-        self.bn_out = nn.BatchNorm1d(self.fc_out_2)
 
     def fake_attention(self, v, n):
         u = v[:, :n].reshape(-1, self.fc1_n)
         u = F.relu(self.fc1(u))
         u = F.relu(self.fc2(u))
         u = F.relu(self.fc3(u))
-        u = self.bn3(u)
         return u
 
     def forward(self, decoder, encoder, target_patch):
@@ -124,7 +121,6 @@ class Selfie(nn.Module):
         res = F.relu(self.fc5(res))
         res = F.relu(self.fc6(res))
         res = self.fc7(res)
-        res = self.bn_out(res)
         return res
 
 
